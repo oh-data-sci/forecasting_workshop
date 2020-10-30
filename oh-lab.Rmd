@@ -1,0 +1,116 @@
+---
+title: "labbi"
+author: "oskar"
+date: "2020-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fpp3)
+library(tidyverse)
+```
+
+```{r blabla, echo=FALSE}
+# in rstudio use r+shift-tab to generate r chunks into documents. 
+x <- 3
+```
+
+## Lab 1
+
+```{r lab1, options}
+#------- Lab Session 1---------------
+#1.1-Import data into R
+ae_uk_original <- readr::read_csv("data/ae_uk.csv", 
+                                  col_types = cols( 
+                                    arrival_time=col_datetime(format = "%d/%m/%Y %H:%M"),
+                                    gender=col_character(),
+                                    type_injury=col_character()))
+
+#1.2- check duplications and fix it
+ae_uk_original %>% duplicated() %>% sum()#check duplicates
+ae_wd <- ae_uk_original %>% dplyr::distinct()# remove duplicates and get a distinct tibble
+# nrow(ae_uk_original)-nrow(ae_wd) check the number of duplication
+#1.3- create tsibble
+ae_tsb <- ae_wd %>% 
+  as_tsibble(key = c(gender,type_injury), index = arrival_time, regular=FALSE)
+# if you start working with a irregular index, you need to  use `regular=FALSE` in as_tsibble
+# regularise an irregular index, create a new tsibble  
+ae_hourly <- ae_tsb %>% group_by(gender, type_injury) %>% 
+  index_by(arrival_1h = lubridate::floor_date(arrival_time, "1 hours")) %>% 
+  summarise(n_attendance=n()) %>% fill_gaps(n_attendance=0L) %>% ungroup()
+
+# 1.4. check implicit NA / gaps in time
+has_gaps(ae_hourly)#check gaps
+scan_gaps(ae_hourly)# show mw gaps
+count_gaps(ae_hourly)# coun gaps
+# if there is any gap, then fill it with zero
+ae_hourly <- ae_tsb %>% group_by(gender, type_injury) %>% 
+  index_by(arrival_1h = lubridate::floor_date(arrival_time, "1 hours")) %>% 
+  summarise(n_attendance=n()) %>% fill_gaps(n_attendance=0L) %>% ungroup()
+#you can use `index_by()` and `summarise()` to regularise index
+# ae_hourly is a tsibble with regular space of 1 hour, you can change it to any interval,e.g. "2 hours","3 hours", etc or create any granular level from the hourly series such as daily, weekly , etc
+# create a daily series to work with a single time series, in tsibble you can work many time series, go to lab session 12 for more information
+ae_daily <- ae_hourly %>% 
+  index_by(year_day=as_date(arrival_1h)) %>% 
+  summarise(n_attendance=sum(n_attendance))
+```
+
+## Lab 2
+
+```{r lab2, options}
+# -------Lab Session 2------------
+# time plot
+ae_hourly %>%autoplot(n_attendance) # create a time plot of hourly data
+ae_daily %>% autoplot(n_attendance) # create a time plot of daily data
+# you can use filter_index to get a subset of data , try ?filter_index
+# filter data to show only observations for february 2016
+ae_daily %>% tsibble::filter_index("2016-01") %>% autoplot(n_attendance)
+
+#you can plot monthly time series
+ae_hourly %>% 
+  # index_by(year_month=yearmonth(arrival_1h)) %>% 
+  index_by(year_month=yearquarter(arrival_1h)) %>% 
+  summarise(n_attendance=sum(n_attendance)) %>% 
+  autoplot(n_attendance) +
+  labs(y = "attendances", x="Month",
+       title = "Monthly A&E attendance",
+       subtitle = "UK hospital")
+# you can try year_quarter=yearquarter(arrival_1h)
+```
+
+## Lab 3
+
+```{r lab3, options}
+#---- Lab Session 3--------
+# use seasonal and subseries plots to check wether series contain seasonality 
+
+ae_hourly %>% gg_season(n_attendance) 
+ae_hourly %>% gg_season(n_attendance,period = "week")# change period to period 
+
+# craete subseries plot
+ae_hourly %>% gg_subseries(n_attendance)
+
+# How do you create a seasonal plot for the monthly and quartely series series
+ae_hourly %>% index_by(year_month=yearmonth(arrival_1h)) %>%
+  summarise(n_attendance=sum(n_attendance)) %>% 
+  gg_subseries()# replace gg_season with gg_subseries()
+  # gg_season()# replace gg_season with gg_subseries()
+
+#Question: is there any seasonality in the daily time series? what about hourly and monthly?
+```
+
+## Lab 4
+
+```{r lab4, options}
+# -------------------------Lab Session 4-------------------------
+
+ae_daily %>% gg_lag(n_attendance, lags = c(1:14), geom = "point")# create lag plots for 14 lags, from 1 to 14
+ae_daily %>% ACF(lag_max = 14)# compute autocorrelation fucntion
+ae_daily %>% ACF(lag_max, lag_max = 14) %>% autoplot()# plot acf
+
+ae_daily %>% gg_tsdisplay(plot_type=c('auto','season','histogram'))# plot time plot, acf and season plot, check ?gg_tsdisplay
+
+ae_daily %>% ACF(n_attendance, ljung_box, dof=0)# use ljung box to test wether ACF is significant, if p-value is amll, << 0.05 then there is a significant autocorrelation 
+
+```

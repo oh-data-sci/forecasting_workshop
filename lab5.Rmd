@@ -1,6 +1,10 @@
 ---
-title: "Lab sessions"
+title: "lab5.Rmd"
+author: "oskar"
+date: "30/10/2020"
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -98,12 +102,12 @@ ae_hourly %>% index_by(year_month=yearmonth(arrival_1h)) %>%
 # -------------------------Lab Session 4-------------------------
 
 ae_daily %>% gg_lag(n_attendance, lags = c(1:14), geom = "point")# create lag plots for 14 lags, from 1 to 14
-ae_daily %>% ACFlag_max = 14)# compute autocorrelation function
-ae_daily %>% ACF(n_attendance, lag_max = 14) %>% -----# plot acf
+ae_daily %>% ACF(lag_max = 14)# compute autocorrelation function
+ae_daily %>% ACF(n_attendance, lag_max = 14) %>% autoplot()# plot acf
 
 ae_daily %>% gg_tsdisplay(n_attendance)# plot time plot, acf and season plot, check ?gg_tsdisplay
 
-ae_daily %>% featu(n_attendance, ljung_box, dof=0)# use ljung box to test whether ACF is significant, if p-value is samll, << 0.05 then there is a significant autocorrelation 
+ae_daily %>% features(n_attendance, ljung_box, dof=0)# use ljung box to test whether ACF is significant, if p-value is samll, << 0.05 then there is a significant autocorrelation
 
 ```
 
@@ -112,7 +116,7 @@ ae_daily %>% featu(n_attendance, ljung_box, dof=0)# use ljung box to test whethe
 ```{r lab5, options}
 # ------Lab Session 5 fittig model, specify and estimate in fable-----
 # start with simple benchmark method: average, naive, snaive, drift
-#how to specify a model MODELNAME(forecastvariable ~ term1+term2+...+term n), if there is no term ignore ~ term1+term2+...+termn
+#how to specify a model MODELNAME(forecast variable ~ term1+term2+...+term n), if there is no term ignore ~ term1+term2+...+termn
 #---fitting: specify models and estimate parameters using model()---
 
 ae_fit <- ae_daily %>%
@@ -125,21 +129,19 @@ ae_fit <- ae_daily %>%
 # to produce forecasts, we pass ae_fit, the mable objet into the forecast()
 af_fc <- ae_fit %>% forecast(h="42 days")
 # forecast needs the forecast horizon as an argument
-af_fc %>% autoplot(filter_index(ae_daily,"2016"~.), level=95)
+af_fc %>% autoplot(filter_index(ae_daily,"2016"~.), level=NULL)
 # we can plot generated forecasts using models, if you don;t want to plot prediction intervals, then level=NULL
 ae_fit %>% augment() # what is the output of this line of code?
 #you can extract fitted values and residuals for each model using augment()
 # you can then use filter() to extract information for any model and select  .fitted or .resid
 #you can replace .model== with any model you have use in tte model(), line 5-11
-ae_fit %>% augment() %>% filter(.model=="mean")%>% select(.fitted)
-ae_fit %>% augment() %>% filter(.model=="snaive")%>% select(.fitted) #%>% autoplot()
-ae_fit %>% augment() %>% filter(.model=="snaive")%>% select(.resid) %>% autoplot()
+ae_fit %>% augment() %>% filter(.model=="mean") %>% select(.fitted)
+# ae_fit %>% augment() %>% ----(.model==---) %>% select(----)
 
 #-----residual diagnostic------
-ae_fit %>% select(mean) %>% gg_tsresiduals()# check residual for the fitted/trained model, do they look like white noise/random?
 ae_fit %>% select(snaive) %>% gg_tsresiduals()# check residual for the fitted/trained model, do they look like white noise/random?
 ae_fit %>% augment() %>% filter(.model=="mean") %>% 
-   features(.resid, ljung_box, lag=14,dof=0)
+  features(.resid, ljung_box, lag=14,dof=0)
 # ljung_box to check residuals,  do you reject the null hypothesis? H0: Time series is random
 ```
 
@@ -165,8 +167,8 @@ nrow(ae_daily)==(nrow(test)+nrow(train))# check if split is correct, the result 
 
 #1. Create different time series using stretch_tsibble
 train_tr <- train %>% # split data into folds with increasing size
-  slice(1:(n()-42)) %>%
-  stretch_tsibble(.init = 5*365, .step = 1)
+  slice(1:(n()-f_horizon)) %>%
+ stretch_tsibble(.init = 5*365, .step =1)
 # .init is the size of initial time series, .step is the increment step >=1
 # what is the purpose of using slice(1:(n()-42))?
 # how many time series/fold we create with this process? what is te new variable .id?
@@ -182,24 +184,22 @@ ae_mode_tr# observe mable
 ae_fc_tr <- ae_mode_tr %>% forecast(h=42)
 ae_fc_tr#observe fable
 
-
 # calculate forecast accuracy both point forecast and prediction interval using accuracy()
 # accuracy() need both the forecast object/fable and all data in train
 # what happens if you use train_tr, instead of train in the following code
-fc_accuracy <- ae_fc_tr %>% accuracy(train, measures = list(
+fc_accuracy <- ae_fc_tr %>% accuracy(train,measures = list(
   point_accuracy_measures,
   interval_accuracy_measures
 )) 
 # you can specify which accuracy measure you want using measures = list()
-# and give list of accuracy measure functions to compute 
-# (such as point_accuracy_measures, interval_accuracy_measures, or distribution_accuracy_measures)
-# if use  ae_fc_tr %>% accuracy(train), it calculates only point forecast
+# if use  ae_fc %>% accuracy(train), it calculates only point forecast
 
-fc_accuracy %>% select(.model, RMSE, MAE, winkler)
+fc_accuracy %>% select(.model,RMSE, MAE,winkler)
 
 # we can report the forecast accuracy using RMSE, MAE and winkler
 # the accuracy measure is calculated for each .id/time series and then averaged across all foled(using mean())
 # this will give us an average accuracy measure across all .id for each model
+
 
 # you can plot forecasts
 ae_model <- train %>% model(mean=MEAN(n_attendance))# specify and train MEAN method on all train data
@@ -210,8 +210,7 @@ ae_model %>% forecast(test) %>% # forecast and visualise it, you can provide the
 
 # results sghow that mean method has the lowes error among 4 methods we compared , we can check wether 
 #this method captured adequate information/systematic patterns in the time series
-# ae_fit %>% select(mean) %>% gg_tsresiduals()# 
-ae_model %>% select(mean) %>% gg_tsresiduals()# check residual for the fitted/trained model, do they look like white noise/random?
+ae_fit %>% filter(.model=="mean") %>% -----()# check residual for the fitted/trained model, do they look like white noise/random?
 ae_fit %>% filter(.model=="mean") %>% 
   augment() %>% ----(.resid, ljung_box, lag=14,dof=0)
 
@@ -262,41 +261,23 @@ fc_accuracy %>% group_by(.model) %>%
 # check ?ETS
 ets_model <- train %>%
   model(
-    automatic_ets = ETS(n_attendance),# automatically tests all options and optimises AIC_c
-    ses           = ETS(n_attendance ~ error("A")+trend("N")+season("N")),
-    holt_winter   = ETS(n_attendance ~ error("A")+trend("A")+season("A")),
-    ets_paramet   = ETS(n_attendance ~ error("A")+trend("Ad", alpha=0.1, phi=0.8)+season('A'))
-    )
+    automatic_ets = ETS(n_attendance),
+    ses = ETS(n_attendance ~ error("A")+trend("N")+season("N")),
+    holt_winter = ETS(n_attendance ~ error("A")+trend("A")+season("A")),
+    ets_paramet = ETS(n_attendance ~ error("A")+trend("Ad", alpha=0.4, phi=.1, phi_range = c(0, 1))+season("A", gamma=.1)))
 
 glance(ets_model)# it provides you with a summary of mable,
-# ets_model %>% select(ets) %>% tidy()# provide 
-ets_model %>% tidy()# provide 
-ets_model %>% select(holt_winter) %>% report()# provide a nice output of one model with parameters estimated
-ets_model %>% select(ses) %>% report()# provide a nice output of models with parameters estimated
+ets_model %>%  tidy(automatic_ets)# provide summary of parameters
+ets_model %>% select(automatic_ets) %>% report()# provide a nice output of models with parameters estimated
 # to forecast, we pass mable to forecast()
-ets_model %>% select(ses) %>% components() %>% select(remainder) %>% autoplot()
+ets_model %>% select(automatic_ets) %>% components()
 
 fcst_ets <- ets_model %>%
   forecast(h = "42 days") 
-# we cam visualise the forecast
+# we can visualise the forecast
 fcst_ets%>%
   autoplot(ae_daily, level = NULL)
 
-
-
-
-
-
-
-#--- 
-#1. Create different time series using stretch_tsibble
-# train_tr <- train %>% # split data into folds with increasing size
-#   slice(1:(n()-42)) %>%
-#   stretch_tsibble(.init = 5*365, .step = 1)
-# # .init is the size of initial time series, .step is the increment step >=1
-# # what is the purpose of using slice(1:(n()-42))?
-# # how many time series/fold we create with this process? what is te new variable .id?
-# 2. train models for each time series and each .id
 ae_mode_tr <- train_tr %>%
   model(
     mean = MEAN(n_attendance),
@@ -309,59 +290,180 @@ ae_mode_tr# observe mable
 ae_fc_tr <- ae_mode_tr %>% forecast(h=42)
 ae_fc_tr#observe fable
 
-
 # calculate forecast accuracy both point forecast and prediction interval using accuracy()
 # accuracy() need both the forecast object/fable and all data in train
 # what happens if you use train_tr, instead of train in the following code
-fc_accuracy <- ae_fc_tr %>% accuracy(train, measures = list(
+fc_accuracy <- ae_fc_tr %>% accuracy(train,measures = list(
   point_accuracy_measures,
   interval_accuracy_measures
-)) 
-# you can specify which accuracy measure you want using measures = list()
-# and give list of accuracy measure functions to compute 
-# (such as point_accuracy_measures, interval_accuracy_measures, or distribution_accuracy_measures)
-# if use  ae_fc_tr %>% accuracy(train), it calculates only point forecast
+))
+# apply best model to train data
+model_best <- train %>% model(automatic_ets=ETS-(n_attendance))
 
-fc_accuracy %>% select(.model, RMSE, MAE, winkler)
-
-# we can report the forecast accuracy using RMSE, MAE and winkler
-# the accuracy measure is calculated for each .id/time series and then averaged across all foled(using mean())
-# this will give us an average accuracy measure across all .id for each model
-
-# you can plot forecasts
-ae_model <- train %>% model(mean=MEAN(n_attendance))# specify and train MEAN method on all train data
-ae_model %>% forecast(test) %>% # forecast and visualise it, you can provide the test set when using forecast() instead of h=42
-  autoplot(filter_index(ae_daily,"2016"))
-
-#-----residual diagnostic------
-
-# results sghow that mean method has the lowes error among 4 methods we compared , we can check wether 
-#this method captured adequate information/systematic patterns in the time series
-# ae_fit %>% select(mean) %>% gg_tsresiduals()# 
-ae_model %>% select(mean) %>% gg_tsresiduals()# check residual for the fitted/trained model, do they look like white noise/random?
-
-
-ae_fit %>% filter(.model=="mean") %>% 
-  augment() %>% ----(.resid, ljung_box, lag=14,dof=0)
-
-
-
-
-
-
-
-ets_tr <- ---- %>% ----(automatic_ets=----()) 
-ets_fcst_tr <- ---- %>% ----(h=----)
-
-fc_accuracy <- ----- %>% ----(----,measures = list(
-  point_accuracy_measures,
-  interval_accuracy_measures
-)) 
-fc_accuracy %>% select(.model,RMSE, MAE,winkler)
-
-glance(----)# it provides you with a summary of mable,
-ets_model %>% select(----) %>% tidy()# provide 
-ets_model %>% select(----) %>% report()# provide a nice output of models with parameters estimated
+glance(model_best)# it provides you with a summary of mable,
+model_best  %>% tidy()# fitted numbers  (don't need %>% select(----) becaus only one model in model_best)
+model_best  %>% report()# provide a nice output of models with parameters estimated
 # to forecast, we pass mable to forecast()
+ets_model %>% select(automatic_ets) %>% components()
+#check residula sfor the best model
+ae_daily %>% model(ets=ETS(n_attendance)) %>% gg_tsresiduals()
 
+#forecast for test part using best model
+model_fcst_best <- ets_best %>% forecast(h=rhorizon)
+#visualise forecast for test part using best model
+model_fcst_best %>% autoplot(ae_daily)
+# extract prediction intervals
+model_fcst_best %>% hilo(level=95) %>% unpack_hilo(`95%`)
+
+```
+
+# Lab 8: ARIMA
+
+```{r arima, options}
+
+#-----Simulate ARIMA process
+library(forecast)
+# generate an arima model, arima.sim() generate an ARIMA model, check ?sim.arima()
+
+# AR -----------------
+# AR(1)
+ar1 <- arima.sim(list(order=c(1,0,0),ar=0.5),n=1000)
+plot(ar1,type='l')
+forecast::Acf(ar1)
+forecast::Pacf(ar1)
+
+# AR(2)
+ar2 <- arima.sim(list(order=c(2,0,0),ar=c(-0.2,0.35)),n=1000)
+plot(ar2,type='l')
+forecast::Acf(ar2)
+forecast::Pacf(ar2)
+
+# MA ----------------------------------------------------------------------------------------------------------------------------------------------------------------
+ma1 <- arima.sim(list(order=c(0,0,1),ma=0.5),n=10000)
+plot(ma1,type='l')
+forecast::Acf(ma1)
+forecast::Pacf(ma1)
+
+ma2 <- arima.sim(list(order=c(0,0,2),ma=c(0.3,0.5)),n=10000)
+plot(ma2,type='l')
+forecast::Acf(ma2)
+forecast::Pacf(ma2)
+
+# ARMA11 ---------------
+phi <- 0.9
+theta <- 0.5
+my.model <- list(order=c(1,0,1),ar=phi,ma=theta)
+arma11 <- arima.sim(my.model,n=10000)
+plot(arma11,type='l')
+forecast::Acf(arma11)
+forecast::Pacf(arma11)
+
+
+# Fit ARIMA with A&E data
+ae_daily %>% autoplot() # look at daily data, do they look like stationary data?
+ae_daily %>% features(n_attendance,unitroot_kpss)# what is type output of KPSS test? does it tell if data is non-stationary?
+ae_daily %>% features(n_attendance,unitroot_ndiffs)# how may first differencing you need to make series stationary?
+# this will tell us what would be the vale of d
+ae_daily %>% features(n_attendance, unitroot_nsdiffs())## how may seasonal differencing you need to make series stationary?
+# this will tell us what would be the vale of D
+ae_daily %>% ACF(n_attendance, lag_max = 21) %>% autoplot()# what does the ACF tell us? what are significant lags?
+ae_daily %>% PACF(n_attendance) %>% autoplot()# what is PACF?
+# how using ACF and PACF help us to determine the order of p, q? look at the properties of MA(q) and AR(p) in slides
+
+# we need to fist calculate the difference and then look at the ACF and PACF
+ae_daily %>% mutate(diff_n_attendance=difference(n_attendance)) %>% ACF(diff_n_attendance) %>% autoplot()
+ae_daily %>% mutate(diff_n_attendance=difference(n_attendance)) %>% PACF(diff_n_attendance) %>% autoplot()
+ae_daily %>% mutate(diff_n_attendance=difference(n_attendance)) %>% features(n_attendance,unitroot_ndiffs)
+
+# fit an automatic ARIMA model to train data, how automatic ARIMA works? 
+# 1. how parameters are estimated? using maximum likelihood estimation
+#how p and q are determined? using Information Criteria
+fit <- train %>% model(arima1=ARIMA(n_attendance ~ pdq(1,1,1)+PDQ(0,0,1)),
+                       arima2 = ARIMA(n_attendance ~ pdq(3,1,0)+PDQ(1,0,0)),
+                       arima = ARIMA(n_attendance))
+# you can try fitting different ARIMA models  such as:
+#arima = ARIMA(n_attendance ~ pdq(3,1,0)+PDQ(1,0,0)),
+#arima1=ARIMA(n_attendance ~ pdq(1,1,1)+PDQ(0,0,1)
+
+fcst_arima <- fit %>% forecast(h=42)  # forecast for 42 days
+fcst_arima %>% autoplot(filter(ae_daily, "2016" ~.))# visualise it
+fit %>% select("arima") %>% report()# look at a sumamry of the model with parameters
+glance(fit)# it provides you with a summary of mable,
+fcst_arima %>% select(arima) %>% tidy()# provide 
+fcst_arima %>% select(arima) %>% report()# provide a nice output of models with parameters estimated
+fcst_arima %>% select() %>% components()
+# can you calculate forecast accuracy for the automatic arima? use accuracy()
+
+ae_mode_tr <- train_tr %>%
+  model(
+    mean = MEAN(n_attendance),
+    naive = NAIVE(n_attendance),
+    snaive = SNAIVE(n_attendance),
+    automatic_ets = ETS(n_attendance),
+    arima = ARIMA(n_attendance)
+  )
+ae_mode_tr# observe mable
+# Produce forecast for h=42 or 42 days for each .id and each model
+ae_fc_tr <- ae_mode_tr %>% forecast(h=42)
+ae_fc_tr#observe fable
+
+
+
+
+```
+
+# Lab 9: regression
+
+```{r lab9, options}
+
+se <- read_csv("data/se.csv", col_types = cols(date = col_date(format = "%d/%m/%Y")))# read a dataset containing dummy variables
+ae_daily <- ae_daily %>% rename(date=year_day)
+ae_holiday <- inner_join(ae_daily,se, by="date")# join dummy variable data to the previous dataset
+
+# we split the data into train and test as before
+f_horizon <- 42
+test <- ae_holiday %>% slice((n()-f_horizon-1):n())
+train <- ae_holiday %>% slice(1:(n()-f_horizon))
+
+# we train data using a regression model
+# TSLM is a Time Series Linera Regression Model
+# in the left hand side of TSLM(), we have the variable we want to forecast
+# in the right hand side, we have all variable we use as predictor
+# trend() is just a linear trend increasing with time, you may want to check trend(knots=)
+fit <- train %>% 
+  model(lr= TSLM(n_attendance ~ trend()+season()),
+        lr_se= TSLM(n_attendance ~ trend()+season()+ `Black Friday`+`Boxing Day`+`Christmas Day`+`Halloween Day`+`New Years Day`)
+        )
+
+fit %>% select(lr_se) %>% report()# we can check the output of any regression model
+# which predictor is significant?
+# what are s0,s1, s2,...
+
+# we pass mable to forecast(), attention: here you have to pass test set to new_data=test,
+# try this and see what you get: 
+# fcast <- fit %>% forecast(h="42 days") # doesn't work
+# but use instead
+fcast <- fit %>% forecast(new_data=test)
+# we calculate accuracy by model
+fcast %>% accuracy(ae_holiday, by=".model") %>% 
+  select(.model,RMSE,MAE)# we select RMSE,MAE for each model
+fcast %>% autoplot(filter_index(ae_daily, "2015"~.))# we can visualise forecast
+
+## ----Time series cross validation with exogenous variables----
+# how do we do TSCV when having exogenous variables? I provide the code without explaining it
+# try to replicate and understand the code!
+f_horizon <- 42
+tarin_tr <- tarin %>% slice(1:(n()-f_horizon)) %>%
+  stretch_tsibble(.init = 4*365, .step = 1)
+m_date <- tarin %>% pull(date)
+test_tr <- tarin %>% filter(date>m_date[4*365]) %>% 
+  slide_tsibble(.size = f_horizon, .step = 1, .id = ".id")
+
+fit_tr <- tarin_tr %>% 
+  model(lr= TSLM(n_attendance ~ season(),
+        lr_se=TSLM(n_attendance ~ trend()+season()+ `Black Friday`+`Boxing Day`+`Christmas Day`+`Halloween Day`+`New Years Day`)
+        )
+  )
+fcast_tr <- fit_tr %>% forecast(new_data=test_tr, h="42 days")
+acc <- fcast_tr %>% accuracy(test_tr)
 ```
